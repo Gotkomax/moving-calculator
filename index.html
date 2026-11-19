@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Кошторис переїзду</title>
+<meta name="description" content="Скільки коштуватиме перевезти речі Новою Поштою з адреси на адресу і як запакуватися дешевше. Неофіційний калькулятор, ціни з API Нової Пошти.">
+<meta name="theme-color" content="#F3F3EF">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src https://api.novaposhta.ua; base-uri 'none'; form-action 'none'">
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='8' width='26' height='18' fill='%23FFE45C' stroke='%231A1A1A' stroke-width='2'/%3E%3Cpath d='M3 14h26' stroke='%231A1A1A' stroke-width='2'/%3E%3C/svg%3E">
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<main class="page">
+
+  <header class="hero">
+    <div class="kicker">Нова Пошта · адреса → адреса</div>
+    <h1>Кошторис переїзду</h1>
+    <p class="lead">Скільки коштуватиме перевезти речі з квартири в квартиру і як запакуватися дешевше.</p>
+    <div class="status" id="status" data-state="pending"><span class="dot" aria-hidden="true"></span><span id="status-text">Звіряю ціни з Новою Поштою…</span></div>
+  </header>
+
+  <section class="card route" aria-label="Маршрут і кур’єр">
+    <div class="grid2">
+      <div class="field city" data-city="from">
+        <label class="label" for="from-input">Звідки</label>
+        <input id="from-input" class="input" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="from-list" placeholder="Місто чи село">
+        <ul id="from-list" class="city-list" role="listbox" hidden></ul>
+        <div class="city-note" data-role="note"></div>
+      </div>
+      <div class="field city" data-city="to">
+        <label class="label" for="to-input">Куди</label>
+        <input id="to-input" class="input" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="to-list" placeholder="Місто чи село">
+        <ul id="to-list" class="city-list" role="listbox" hidden></ul>
+        <div class="city-note" data-role="note"></div>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <fieldset class="doors">
+      <legend class="label">Кур’єр «До дверей»</legend>
+      <label class="check"><input type="checkbox" id="pickup">Забрати з квартири</label>
+      <label class="check"><input type="checkbox" id="delivery">Занести в квартиру</label>
+    </fieldset>
+    <div class="rule"></div>
+    <div class="field">
+      <div class="label" id="mode-label">Оформлення</div>
+      <div class="segmented" role="group" aria-labelledby="mode-label">
+        <button type="button" data-mode="one" aria-pressed="true">Однією накладною</button>
+        <button type="button" data-mode="separate" aria-pressed="false">Кожне місце окремо</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="side" aria-label="Підсумок">
+    <section class="total" id="total" aria-live="polite">
+      <div class="total-head"><span>Разом</span><span id="total-summary"></span></div>
+      <div class="total-sum"><span id="total-sum">—</span> <span class="cur">грн</span></div>
+      <div class="total-note" id="total-note"></div>
+      <div class="tip" id="tip" hidden>
+        <div class="tip-head"><span>Головна порада</span><span id="tip-saving"></span></div>
+        <div class="tip-text" id="tip-text"></div>
+        <div class="tip-sub" id="tip-sub"></div>
+        <button type="button" class="btn btn-ink" id="tip-btn" hidden></button>
+      </div>
+      <div class="tip tip-none" id="tip-none" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Усе запаковано оптимально: ми не бачимо, як зробити дешевше.</span></div>
+      <ul class="ship-notes" id="ship-notes"></ul>
+    </section>
+
+    <section class="card breakdown" aria-labelledby="bd-h">
+      <h2 id="bd-h">Розрахунок</h2>
+      <ul class="lines" id="lines"></ul>
+      <div class="line-total"><span>Разом</span><span id="bd-total"></span></div>
+      <div class="small" id="bd-alt"></div>
+    </section>
+
+    <section class="share">
+      <button type="button" class="btn btn-accent btn-wide" id="share">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+        Поділитися розрахунком
+      </button>
+      <button type="button" class="btn btn-wide" id="copy-chat">Скопіювати підсумок текстом</button>
+      <p class="small">Посилання зберігає список речей і міста. Адрес у ньому немає.</p>
+    </section>
+  </aside>
+
+  <section class="places" aria-labelledby="places-h">
+    <div class="places-head">
+      <h2 id="places-h">Місця</h2>
+      <span class="hint-mono">номер пиши на коробці</span>
+    </div>
+    <div class="example-note" id="example-note" hidden>
+      <span>Це приклад переїзду Київ → Львів. Заміни на свої речі.</span>
+      <button type="button" class="btn btn-small" id="clear">Очистити</button>
+    </div>
+    <ol class="place-list" id="place-list"></ol>
+    <div class="empty" id="empty" hidden>
+      <p>Додай перше місце: коробку, валізу чи техніку.</p>
+      <button type="button" class="btn btn-small" id="show-example">Показати приклад</button>
+    </div>
+  </section>
+
+  <section class="card card-dashed add">
+    <button type="button" class="btn btn-wide" id="add-place">+ Додати місце</button>
+    <div class="label">Або коробка з шаблону, см</div>
+    <div class="chips" id="presets"></div>
+    <div class="small">Вагу впиши самостійно. Якщо є ваги, просто зваж коробку.</div>
+    <div class="rule"></div>
+    <label class="inline-field">Нова коробка коштує <input id="box-price" class="input input-num" type="text" inputmode="decimal" aria-label="Ціна нової коробки, грн"> грн</label>
+  </section>
+
+  <section class="card rules">
+    <details>
+      <summary>Як Нова Пошта рахує адресну доставку</summary>
+      <ul class="rules-list" id="rules-list"></ul>
+      <p class="small">Правила виміряно запитами до API Нової Пошти. Ставки для твого маршруту сторінка перевіряє сама.</p>
+    </details>
+  </section>
+
+  <footer class="footer">
+    <p>Неофіційний сервіс, не пов’язаний з Новою Поштою. Перед відправкою звір ціну в застосунку НП.</p>
+    <p>Зробив Макс Готко · <a href="https://github.com/Gotkomax/moving-planner">код на GitHub</a></p>
+  </footer>
+</main>
+
+<div class="sticky" id="sticky" hidden>
+  <a href="#total" class="sticky-in">
+    <span class="sticky-sum"><span id="sticky-sum">—</span> грн</span>
+    <span class="sticky-tip" id="sticky-tip"></span>
+  </a>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<noscript><p class="page">Для розрахунку потрібен JavaScript.</p></noscript>
+</body>
+</html>
