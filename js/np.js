@@ -3,7 +3,7 @@
 import * as M from './model.js';
 
 const URL = 'https://api.novaposhta.ua/v2.0/json/';
-const CACHE_KEY = 'np-moving-planner:rates:v1';
+const CACHE_KEY = 'moving-calculator:rates:v1';
 const RATES_TTL_MS = 24 * 60 * 60 * 1000;
 
 async function call(modelName, calledMethod, methodProperties, signal) {

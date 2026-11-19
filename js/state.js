@@ -1,7 +1,7 @@
 // Стан сторінки: збереження в браузері і посилання «поділитися».
 import { num } from './model.js';
 
-const STORE_KEY = 'np-moving-planner:state:v1';
+const STORE_KEY = 'moving-calculator:state:v1';
 
 let seq = 0;
 export const newId = () => `p${Date.now().toString(36)}${(seq++).toString(36)}`;
