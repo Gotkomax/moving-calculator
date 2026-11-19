@@ -2,6 +2,8 @@
 // Запуск: відкрити tests/index.html через локальний сервер (див. README).
 import * as M from '../js/model.js';
 import * as H from '../js/hints.js';
+import * as NP from '../js/np.js';
+import SNAPSHOT from '../js/snapshot.js';
 import { examplePlaces, defaultState, encodeShare, decodeShare, SHARE_MAX_PLACES } from '../js/state.js';
 
 const results = [];
@@ -167,6 +169,16 @@ truthy('посилання: ціна коробки з комою 80,5 не гу
 truthy('посилання: міста, режим і місця ті самі', shared.from.name === 'Київ' && shared.to.name === 'Львів' && shared.mode === 'separate' && shared.pickup === false && shared.places.length === 6 && shared.places[3].kg === 22, JSON.stringify(shared));
 const many = decodeShare(encodeShare({ ...defaultState(), places: Array.from({ length: 300 }, () => P(5, 20, 20, 20, 500, { name: 'x'.repeat(500) })) }));
 truthy('посилання: не більше 100 місць, назва до 80 символів', many.places.length === SHARE_MAX_PLACES && many.places[0].name.length === 80, `${many.places.length} / ${many.places[0].name.length}`);
+
+// --- знімок прикладу (js/snapshot.js) ---
+const ds = defaultState();
+const dsRoute = { from: ds.from.ref, to: ds.to.ref };
+truthy('знімок: той самий приклад, що на сторінці (змінив приклад — онови знімок)', SNAPSHOT.key === NP.verifyKey(dsRoute, ds, ds.places), SNAPSHOT.key);
+truthy('знімок: маршрут прикладу', SNAPSHOT.route.from === dsRoute.from && SNAPSHOT.route.to === dsRoute.to);
+const sq = M.quote(ds.places, { pickup: ds.pickup, delivery: ds.delivery }, SNAPSHOT.rates);
+eq('знімок: модель зі ставками знімка = сума НП однією накладною', sq.one.total, SNAPSHOT.totals.one);
+eq('знімок: модель зі ставками знімка = сума НП окремими накладними', sq.separate.total, SNAPSHOT.totals.separate);
+truthy('знімок: інший набір місць зі знімка не береться', NP.snapshotTotals(NP.verifyKey(dsRoute, ds, ds.places.slice(1))) === null);
 
 // --- вивід ---
 const failed = results.filter((r) => !r.ok);

@@ -32,6 +32,8 @@ let verifyTimer = null;
 let verifyAbort = null;
 let ratesAbort = null;
 let lastTip = null;
+// Пауза після останньої правки перед звіркою з API: щоб не слати запит на кожну набрану цифру.
+const VERIFY_DELAY_MS = 2000;
 // Розрахунок, відкритий з чужого посилання. Поки людина його не змінила, свій збережений список не чіпаємо.
 let sharedSnapshot = null;
 
@@ -332,13 +334,16 @@ function hintHtml(h) {
 // ---------------------------------------------------------------- розрахунок
 
 function verifyKey(valid) {
-  return JSON.stringify([
-    state.from.ref,
-    state.to.ref,
-    !!state.pickup,
-    !!state.delivery,
-    valid.map((p) => [M.sides(p), M.weightKg(p), M.declared(p)]),
-  ]);
+  return NP.verifyKey({ from: state.from.ref, to: state.to.ref }, state, valid);
+}
+
+/** Якщо на сторінці саме приклад зі знімка, беремо його суми й не питаємо API. */
+function useSnapshot(key) {
+  if (api.key === key && api.status === 'ok') return;
+  const snap = NP.snapshotTotals(key);
+  if (!snap) return;
+  clearTimeout(verifyTimer);
+  api = { key, totals: snap.totals, status: 'ok', at: snap.at };
 }
 
 function update() {
@@ -346,6 +351,7 @@ function update() {
   const opts = { pickup: !!state.pickup, delivery: !!state.delivery, mode: state.mode };
   const q = M.quote(valid, opts, rates);
   const key = verifyKey(valid);
+  useSnapshot(key);
   const apiOk = api.key === key && api.status === 'ok' && api.totals;
   const totals = apiOk ? api.totals : { one: q.one.total, separate: q.separate.total };
   const n = state.places.length;
@@ -515,7 +521,7 @@ function scheduleVerify(key, valid) {
       api = { key, totals: null, status: 'error', at: 0 };
     }
     update();
-  }, 800);
+  }, VERIFY_DELAY_MS);
 }
 
 function updateStatus() {
@@ -526,8 +532,12 @@ function updateStatus() {
     text.textContent = 'Обери міста, щоб звірити ціни з Новою Поштою';
   } else if (api.status === 'ok') {
     el.dataset.state = 'ok';
-    const t = new Date(api.at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
-    text.textContent = `Ціни з API Нової Пошти · звірено о ${t}`;
+    const at = new Date(api.at);
+    const today = at.toDateString() === new Date().toDateString();
+    const t = today
+      ? `о ${at.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}`
+      : at.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
+    text.textContent = `Ціни з API Нової Пошти · звірено ${t}`;
   } else if (api.status === 'error') {
     el.dataset.state = 'offline';
     text.textContent = 'Нова Пошта не відповідає — ціни за нашою моделлю, орієнтовні';
