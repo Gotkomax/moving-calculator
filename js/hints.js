@@ -29,6 +29,32 @@ export function shrinkTo(p, targetCm3) {
   return best;
 }
 
+/**
+ * Усі сторони, якими можна вкластися в targetCm3: людина сама знає, яку з них реально зменшити
+ * (довжину стільниці не вкоротиш, а сантиметр пакування з товщини зняти можна).
+ * Лише зменшення до 30%; у порядку від найбільшої сторони.
+ */
+export function shrinkOptions(p, targetCm3) {
+  const s = M.sides(p);
+  const out = [];
+  for (let i = 0; i < 3; i++) {
+    const other = s.filter((_, j) => j !== i).reduce((a, b) => a * b, 1);
+    if (!other) return [];
+    const to = Math.floor(targetCm3 / other);
+    if (to < 1 || to >= s[i]) continue;
+    const ratio = (s[i] - to) / s[i];
+    if (ratio > 0.3 || out.some((o) => o.from === s[i])) continue;
+    out.push({ index: i, from: s[i], to, ratio });
+  }
+  return out;
+}
+
+/** «105 → 102 см, 65 → 63 см або 18 → 17 см» */
+function optionsText(options) {
+  const parts = options.map((o) => `${cm(o.from)} → ${cm(o.to)} см`);
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} або ${parts[parts.length - 1]}` : parts[0];
+}
+
 function withSide(p, index, value) {
   const s = M.sides(p);
   s[index] = value;
@@ -122,10 +148,14 @@ export function placeHints(p, ctx) {
       const fixed = M.placeTariff(withSide(p, sh.index, sh.to), r);
       const saving = cur - fixed;
       if (saving > 0) {
+        const opts = shrinkOptions(p, 30 * M.DIVISOR);
+        const how = opts.length > 1
+          ? `Зменш одну зі сторін: ${optionsText(opts)}, і буде ${money0(fixed)}.`
+          : `Якщо сторону ${cm(sh.from)} см зменшити до ${cm(sh.to)} см, буде ${money0(fixed)}.`;
         gains.push({
           kind: 'money',
           saving,
-          text: `Об’ємна вага ${kg(vol)} кг — це вже вантаж: ${money0(cur)} грн замість ${money0(fixed)}. Якщо сторону ${cm(sh.from)} см зменшити до ${cm(sh.to)} см, буде ${money0(fixed)}.`,
+          text: `Об’ємна вага ${kg(vol)} кг — це вже вантаж: ${money0(cur)} грн замість ${money0(fixed)}. ${how}`,
         });
       }
     }
@@ -151,10 +181,13 @@ export function placeHints(p, ctx) {
       const saving = cur - newTariff;
       if (sh && saving > 0) {
         if (sh.ratio <= 0.3) {
+          const opts = shrinkOptions(p, M.TIER_KG[lower] * M.DIVISOR);
           gains.push({
             kind: 'money',
             saving,
-            text: `Якщо сторону ${cm(sh.from)} см зменшити до ${cm(sh.to)} см, місце коштуватиме ${money0(newTariff)} грн замість ${money0(cur)}.`,
+            text: opts.length > 1
+              ? `Зменш одну зі сторін: ${optionsText(opts)}, і місце коштуватиме ${money0(newTariff)} грн замість ${money0(cur)}.`
+              : `Якщо сторону ${cm(sh.from)} см зменшити до ${cm(sh.to)} см, місце коштуватиме ${money0(newTariff)} грн замість ${money0(cur)}.`,
           });
         } else if (SOFT.test(p.name || '')) {
           gains.push({

@@ -119,7 +119,12 @@ truthy('А3: 31 кг — вийми 1 кг і переклади в місце 2
 const big = P(5, 71, 40, 43);
 const hb = H.placeHints(big, { rates: M.DEFAULT_RATES, valid: [big], label: () => '1/1', doorOn: false });
 const a4 = hb.find((h) => h.kind === 'money');
-truthy('А4: 71×40×43 — сторону 43 см зменшити до 42 см, −203', a4 && a4.saving === 203 && a4.text.includes('43 см зменшити до 42 см'), JSON.stringify(hb));
+truthy('А4: 71×40×43 — усі три сторони на вибір, −203', a4 && a4.saving === 203 && a4.text.includes('Зменш одну зі сторін: 71 → 69 см, 43 → 42 см або 40 → 39 см, і буде 200.'), JSON.stringify(hb));
+const hintsOf = (p) => H.placeHints(p, { rates: M.DEFAULT_RATES, valid: [p], label: () => '1/1', doorOn: false });
+const table = hintsOf(P(10, 105, 65, 18));
+truthy('А4: стіл 105×65×18 — можна зняти 1 см товщини, а не лише довжину', table.some((h) => h.saving === 203 && h.text.includes('105 → 102 см, 65 → 63 см або 18 → 17 см')), JSON.stringify(table));
+truthy('А4: стіл 105×65×17 — уже 200 грн, без підказки про вантаж', M.placeTariff(P(10, 105, 65, 17)) === 200 && !hintsOf(P(10, 105, 65, 17)).some((h) => h.text.includes('вантаж')));
+truthy('варіанти сторін: куб 40×40×41 не повторює однакові сторони', H.shrinkOptions(P(1, 40, 40, 41), 60000).length === 2, JSON.stringify(H.shrinkOptions(P(1, 40, 40, 41), 60000)));
 
 const long = P(5, 121, 30, 10);
 const hl = H.placeHints(long, { rates: M.DEFAULT_RATES, valid: [long], label: () => '1/1', doorOn: false });
