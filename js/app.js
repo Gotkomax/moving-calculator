@@ -39,8 +39,8 @@ let sharedSnapshot = null;
 
 // ---------------------------------------------------------------- старт
 
-function init() {
-  const loaded = S.load();
+async function init() {
+  const loaded = await S.load();
   state = loaded.state;
   if (loaded.fromLink) {
     sharedSnapshot = JSON.stringify(state);
@@ -56,7 +56,7 @@ function init() {
   setupSticky();
   // посилання вставили у вже відкриту вкладку
   window.addEventListener('hashchange', () => {
-    if (/[#&]s=/.test(location.hash)) location.reload();
+    if (/[#&][sz]=/.test(location.hash)) location.reload();
   });
 }
 
@@ -153,7 +153,7 @@ function bindStatic() {
   });
   $('share').addEventListener('click', share);
   $('copy-chat').addEventListener('click', async () => {
-    const ok = await copyText(chatText());
+    const ok = await copyText(await chatText());
     toast(ok ? 'Текст скопійовано — встав у чат' : 'Не вдалося скопіювати');
   });
 }
@@ -552,7 +552,7 @@ function updateStatus() {
 
 // ---------------------------------------------------------------- поділитися
 
-function chatText() {
+async function chatText() {
   const valid = state.places.filter(M.hasDims);
   const cur = state.mode === 'separate' ? 'separate' : 'one';
   const lines = ['Кошторис переїзду Новою Поштою'];
@@ -560,12 +560,12 @@ function chatText() {
   lines.push(`${$('total-summary').textContent}`);
   lines.push(`${cur === 'one' ? 'Однією накладною' : 'Кожне місце окремою накладною'}: ${$('total-sum').textContent} грн`);
   if (lastTip && valid.length) lines.push(`Порада: ${lastTip.text} (−${money(lastTip.saving)} грн)`);
-  lines.push(`Розрахунок: ${S.shareUrl(state)}`);
+  lines.push(`Розрахунок: ${await S.shareUrl(state)}`);
   return lines.join('\n');
 }
 
 async function share() {
-  const url = S.shareUrl(state);
+  const url = await S.shareUrl(state);
   if (navigator.share && matchMedia('(pointer: coarse)').matches) {
     try {
       await navigator.share({ title: 'Кошторис переїзду', text: `Переїзд ${state.from.name} → ${state.to.name}: ${$('total-sum').textContent} грн`, url });

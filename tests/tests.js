@@ -4,7 +4,7 @@ import * as M from '../js/model.js';
 import * as H from '../js/hints.js';
 import * as NP from '../js/np.js';
 import SNAPSHOT from '../js/snapshot.js';
-import { examplePlaces, defaultState, encodeShare, decodeShare, SHARE_MAX_PLACES } from '../js/state.js';
+import { examplePlaces, defaultState, encodeShare, encodeShareLegacy, decodeShare, SHARE_MAX_PLACES } from '../js/state.js';
 
 const results = [];
 function eq(name, got, want) {
@@ -169,11 +169,25 @@ const sn = H.shipmentHints(near, { mode: 'one', pickup: true, delivery: true }, 
 truthy('Б2: 205,8 кг — скинь 5,8 кг, −800', sn.some((h) => h.saving === 800 && h.text.includes('5,8')), JSON.stringify(sn));
 
 // --- посилання «поділитися» ---
-const shared = decodeShare(encodeShare({ ...defaultState(), boxPrice: '80,5', mode: 'separate', pickup: false }));
+const shared = await decodeShare(await encodeShare({ ...defaultState(), boxPrice: '80,5', mode: 'separate', pickup: false }));
 truthy('посилання: ціна коробки з комою 80,5 не губиться', shared.boxPrice === 80.5, String(shared.boxPrice));
 truthy('посилання: міста, режим і місця ті самі', shared.from.name === 'Київ' && shared.to.name === 'Львів' && shared.mode === 'separate' && shared.pickup === false && shared.places.length === 6 && shared.places[3].kg === 22, JSON.stringify(shared));
-const many = decodeShare(encodeShare({ ...defaultState(), places: Array.from({ length: 300 }, () => P(5, 20, 20, 20, 500, { name: 'x'.repeat(500) })) }));
+const many = await decodeShare(await encodeShare({ ...defaultState(), places: Array.from({ length: 300 }, () => P(5, 20, 20, 20, 500, { name: 'x'.repeat(500) })) }));
 truthy('посилання: не більше 100 місць, назва до 80 символів', many.places.length === SHARE_MAX_PLACES && many.places[0].name.length === 80, `${many.places.length} / ${many.places[0].name.length}`);
+
+const zLink = await encodeShare(defaultState());
+const sLink = encodeShareLegacy(defaultState());
+truthy('посилання: стиснуте z= помітно коротше за старе s= (приклад: менш як 60%)', zLink.startsWith('z=') && zLink.length < sLink.length * 0.6, `${zLink.length} / ${sLink.length}`);
+const repeated = { ...defaultState(), places: Array.from({ length: 14 }, (_, i) => P(20 + (i % 5), 70, 40, 42, 2000, { name: 'Книги на дно, одяг зверху' })) };
+const zRep = await encodeShare(repeated);
+truthy('посилання: 14 схожих коробок — утричі коротше за старий формат', zRep.length * 3 < encodeShareLegacy(repeated).length, `${zRep.length} / ${encodeShareLegacy(repeated).length}`);
+const old = await decodeShare(sLink);
+truthy('посилання: старий формат s= читається', old.to.name === 'Львів' && old.places.length === 6 && old.places[4].name === 'Посуд у папері', JSON.stringify(old));
+const shareVillage = { name: 'Іванівка', ref: 'r1', present: 'с. Іванівка, Одеський р-н, Одеська обл.' };
+const withVillage = await decodeShare(await encodeShare({ ...defaultState(), to: shareVillage }));
+truthy('посилання: підпис міста не пишемо, підпис села лишаємо', withVillage.from.present === '' && withVillage.from.name === 'Київ' && withVillage.to.present === shareVillage.present, JSON.stringify([withVillage.from, withVillage.to]));
+const broken = await decodeShare('z=AAAA').then(() => 'ok', () => 'error');
+truthy('посилання: битий параметр дає помилку, а не стан', broken === 'error', broken);
 
 // --- знімок прикладу (js/snapshot.js) ---
 const ds = defaultState();

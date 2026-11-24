@@ -41,8 +41,8 @@ export function emptyPlace(extra = {}) {
   return { id: newId(), name: '', l: '', w: '', h: '', kg: '', cost: '', buy: false, approx: false, ...extra };
 }
 
-export function load() {
-  const shared = readHash();
+export async function load() {
+  const shared = await readHash();
   if (shared) return { state: shared, fromLink: true };
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -68,27 +68,61 @@ export function save(state) {
 }
 
 // ---- посилання: речі, міста й налаштування; адрес і імен у ньому немає ----
+// Два формати. #z= — той самий JSON, стиснутий deflate: посилання виходить у кілька разів коротшим,
+// його й пишемо. #s= — старий, без стиснення: читаємо завжди, пишемо лише там, де браузер
+// не вміє CompressionStream.
 
-function toB64Url(str) {
-  const bytes = new TextEncoder().encode(str);
+function bytesToB64Url(bytes) {
   let bin = '';
-  bytes.forEach((b) => (bin += String.fromCharCode(b)));
+  for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function fromB64Url(s) {
-  const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
-  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
+function b64UrlToBytes(s) {
+  return Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 }
 
-export function encodeShare(state) {
-  const compact = {
-    f: [state.from.name, state.from.ref, state.from.present || ''],
-    t: [state.to.name, state.to.ref, state.to.present || ''],
+// Розпакований JSON з посилання не більший за це: захист від «бомби» у стиснутому посиланні.
+const SHARE_MAX_JSON_BYTES = 200000;
+
+/** Проганяє байти через CompressionStream / DecompressionStream; кидає помилку, якщо результат більший за limit. */
+async function through(bytes, transform, limit = Infinity) {
+  const reader = new Blob([bytes]).stream().pipeThrough(transform).getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > limit) {
+      await reader.cancel();
+      throw new Error('Посилання завелике');
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.length;
+  }
+  return out;
+}
+
+// Підпис «м. Київ, Київська обл.» для міст у посилання не кладемо: назви досить.
+// Для сіл і селищ лишаємо, бо однакових назв багато і без області їх не розрізнити.
+function cityOut(c) {
+  const a = [c.name, c.ref];
+  if (c.present && !c.present.startsWith('м. ')) a.push(c.present);
+  return a;
+}
+
+function compact(state) {
+  return {
+    f: cityOut(state.from),
+    t: cityOut(state.to),
     o: [state.pickup ? 1 : 0, state.delivery ? 1 : 0, state.mode === 'separate' ? 1 : 0, num(state.boxPrice)],
     p: state.places.map((p) => [p.name || '', p.l, p.w, p.h, p.kg, p.cost, p.buy ? 1 : 0, p.approx ? 1 : 0]),
   };
-  return toB64Url(JSON.stringify(compact));
 }
 
 // Посилання приходить ззовні. Кожне унікальне місце — окремий запит звірки до API НП,
@@ -96,8 +130,7 @@ export function encodeShare(state) {
 export const SHARE_MAX_PLACES = 100;
 const SHARE_MAX_NAME = 80;
 
-export function decodeShare(s) {
-  const c = JSON.parse(fromB64Url(s));
+function expand(c) {
   const city = (a) => ({ name: String(a[0] || ''), ref: String(a[1] || ''), present: String(a[2] || '') });
   return {
     ...defaultState(),
@@ -122,17 +155,45 @@ export function decodeShare(s) {
   };
 }
 
-function readHash() {
-  const m = /[#&]s=([A-Za-z0-9_-]+)/.exec(location.hash || '');
+const shareJson = (state) => new TextEncoder().encode(JSON.stringify(compact(state)));
+
+/** Старий формат без стиснення: «s=…». */
+export function encodeShareLegacy(state) {
+  return `s=${bytesToB64Url(shareJson(state))}`;
+}
+
+/** Параметр посилання: «z=…» (стиснутий) або «s=…», якщо браузер не вміє стискати. */
+export async function encodeShare(state) {
+  if (typeof CompressionStream === 'function') {
+    try {
+      return `z=${bytesToB64Url(await through(shareJson(state), new CompressionStream('deflate-raw')))}`;
+    } catch {
+      /* браузер не знає deflate-raw — пишемо старий формат */
+    }
+  }
+  return encodeShareLegacy(state);
+}
+
+/** Стан сторінки з параметра «z=…» або «s=…». Кидає помилку, якщо параметр битий. */
+export async function decodeShare(param) {
+  const m = /^([sz])=([A-Za-z0-9_-]+)$/.exec(param);
+  if (!m) throw new Error('Це не посилання на розрахунок');
+  let bytes = b64UrlToBytes(m[2]);
+  if (m[1] === 'z') bytes = await through(bytes, new DecompressionStream('deflate-raw'), SHARE_MAX_JSON_BYTES);
+  return expand(JSON.parse(new TextDecoder().decode(bytes)));
+}
+
+async function readHash() {
+  const m = /[#&]([sz]=[A-Za-z0-9_-]+)/.exec(location.hash || '');
   if (!m) return null;
   try {
-    return decodeShare(m[1]);
+    return await decodeShare(m[1]);
   } catch {
     return null;
   }
 }
 
-export function shareUrl(state) {
+export async function shareUrl(state) {
   const base = location.href.split('#')[0];
-  return `${base}#s=${encodeShare(state)}`;
+  return `${base}#${await encodeShare(state)}`;
 }
